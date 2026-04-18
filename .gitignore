@@ -1,0 +1,70 @@
+# Binaries for programs and plugins
+/bin/
+build/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of go build
+*.a
+*.o
+
+# Dependency directories (remove if vendoring intentionally)
+vendor/
+Gopkg.lock
+Gopkg.toml
+
+# Go workspace and module files (optional to ignore go.work if you don't share it)
+go.work
+go.work.sum
+
+# Go test / coverage
+coverage.out
+*.coverprofile
+_testmain.go
+
+# Package objects and caches
+pkg/
+*.prof
+
+# Generated files (adjust if you commit generated code)
+*_gen.go
+*.pb.go
+
+# SQL / DB files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment and secrets
+.env
+.env.*
+secrets.*
+*.key
+*.pem
+
+# Logs and temp
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+# GoLand caches
+/out/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
