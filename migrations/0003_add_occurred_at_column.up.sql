@@ -1,0 +1,2 @@
+ALTER TABLE outbox_events
+ADD COLUMN occurred_at TIMESTAMPTZ NULL;
