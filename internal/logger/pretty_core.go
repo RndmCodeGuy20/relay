@@ -38,16 +38,12 @@ func (c *prettyCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 		f.AddTo(enc)
 	}
 
-	// 🔹 time
 	ts := entry.Time.Format("15:04:05")
 
-	// 🔹 level
 	level := colorLevel(entry.Level)
 
-	// 🔹 caller
 	caller := entry.Caller.TrimmedPath()
 
-	// 🔹 main line
 	line := fmt.Sprintf(
 		"%s  %s  %s  %s\n",
 		grey(ts),
@@ -56,7 +52,6 @@ func (c *prettyCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 		entry.Message,
 	)
 
-	// 🔹 pretty fields (aligned, not JSON)
 	if len(enc.Fields) > 0 {
 		line += "\n"
 
