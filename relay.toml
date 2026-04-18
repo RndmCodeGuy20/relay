@@ -1,0 +1,17 @@
+name = "relay"
+version = "0.1.0"
+description = "Event relay service using outbox pattern"
+author = "Shantanu Mane"
+
+[project]
+repository = "github.com/rndmcodeguy20/relay"
+license = "MIT"
+
+[scripts]
+start = "go run cmd/main.go"
+migrate_up = "task db:up"
+migrate_down = "task db:down"
+build = "go build -o bin/relay cmd/main.go"
+
+[tools]
+go = "1.25"
