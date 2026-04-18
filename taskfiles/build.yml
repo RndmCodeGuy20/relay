@@ -1,0 +1,32 @@
+version: '3'
+
+vars:
+  BUILD_TIME:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+
+  GIT_COMMIT:
+    sh: |
+      git rev-parse --short HEAD 2>/dev/null || echo "dev"
+
+  VERSION:
+    sh: toml get --toml-path relay.toml version 2>/dev/null || echo "0.0.0"
+
+  LDFLAGS: >-
+    -X 'main.Version={{.VERSION}}'
+    -X 'main.BuildTime={{.BUILD_TIME}}'
+    -X 'main.CommitHash={{.GIT_COMMIT}}'
+
+tasks:
+  dev:
+    desc: Build debug binary
+    cmds:
+      - go build -o {{.BUILD_DIR}}/{{.APP_NAME}} {{.MAIN_PATH}}
+
+  prod:
+    desc: Build optimized binary
+    cmds:
+      - go build -ldflags="{{.LDFLAGS}} -s -w" -o {{.BUILD_DIR}}/{{.APP_NAME}} {{.MAIN_PATH}}
+
+  clean:
+    cmds:
+      - rm -rf {{.BUILD_DIR}}

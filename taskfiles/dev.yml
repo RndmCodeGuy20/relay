@@ -1,0 +1,17 @@
+version: '3'
+
+tasks:
+  run:
+    desc: Run app
+    cmds:
+      - go run {{.MAIN_PATH}}
+
+  watch:
+    desc: Hot reload using air
+    cmds:
+      - air
+
+  start:
+    desc: Run built binary
+    cmds:
+      - ./{{.BUILD_DIR}}/{{.APP_NAME}}

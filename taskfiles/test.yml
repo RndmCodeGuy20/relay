@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  unit:
+    cmds:
+      - go test ./... -v
+
+  integration:
+    cmds:
+      - go test -tags=integration ./internal/ingestion -v
+    env:
+      APP_ENV: test
+    dotenv:
+      - .env.test
+      - .env
+
+  ingest-manual-run:
+    cmds:
+      - pwsh -NoProfile -File scripts/run-ingest-http.ps1 -FilePath requests/ingest.http {{.CLI_ARGS}}
+
+  race:
+    cmds:
+      - go test ./... -race
+
+  coverage:
+    cmds:
+      - go test ./... -coverprofile=coverage.out
+
+  all:
+    cmds:
+      - task: unit
+      - task: race

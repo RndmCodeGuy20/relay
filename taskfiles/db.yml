@@ -1,0 +1,63 @@
+version: '3'
+
+tasks:
+  up:
+    cmds:
+      - go run cmd/migrate/main.go up
+
+  down:
+    cmds:
+      - go run cmd/migrate/main.go down {{.CLI_ARGS}}
+
+  reset:
+    cmds:
+      - task: down -- 100
+      - task: up
+
+  create:
+    cmds:
+      - psql -c "CREATE DATABASE outbox;"
+
+  test-up:
+    cmds:
+      - go run cmd/migrate/main.go up
+    env:
+      APP_ENV: test
+    dotenv:
+      - .env.test
+      - .env
+
+  test-down:
+    cmds:
+      - go run cmd/migrate/main.go down {{.CLI_ARGS}}
+    env:
+      APP_ENV: test
+    dotenv:
+      - .env.test
+      - .env
+
+  reset-test:
+    cmds:
+      - task: test-down -- 100
+      - task: test-up
+    env:
+      APP_ENV: test
+    dotenv:
+      - .env.test
+      - .env
+
+  test-reset:
+    cmds:
+      - task: reset-test
+    
+  create-test:
+    cmds:
+      - psql -c "CREATE DATABASE outbox_test;" -U postgres
+
+  up-test:
+    cmds:
+      - task: test-up
+
+  down-test:
+    cmds:
+      - task: test-down
