@@ -1,0 +1,8 @@
+services:
+  relay:
+    image: relay
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 5972:5972
