@@ -115,7 +115,7 @@ func (s *RelayService) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
 		cancel()
 
 		if err != nil {
-			log.Error("Failed to receive message", zap.Error(err), zap.String("lsn", s.currentLSN.String()))
+			// log.Error("Failed to receive message", zap.Error(err), zap.String("lsn", s.currentLSN.String()))
 			if pgconn.Timeout(err) {
 				continue
 			}
