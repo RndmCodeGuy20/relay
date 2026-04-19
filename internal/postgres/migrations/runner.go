@@ -132,8 +132,7 @@ func (r *Runner) Down(ctx context.Context, migrations []Migration, steps int) er
 func (r *Runner) apply(ctx context.Context, m Migration) error {
 	sql := m.UpSQL
 
-	// Detect CONCURRENTLY → must run outside tx
-	if strings.Contains(strings.ToUpper(sql), "CONCURRENTLY") {
+	if mustRunOutsideTx(sql) {
 		if _, err := r.pool.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("exec (non-tx): %w", err)
 		}
@@ -168,6 +167,17 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 }
 
 func (r *Runner) rollback(ctx context.Context, m Migration) error {
+	if mustRunOutsideTx(m.DownSQL) {
+		if _, err := r.pool.Exec(ctx, m.DownSQL); err != nil {
+			return fmt.Errorf("exec down (non-tx): %w", err)
+		}
+
+		_, err := r.pool.Exec(ctx,
+			`DELETE FROM schema_migrations WHERE version = $1`, m.Version,
+		)
+		return err
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -186,4 +196,24 @@ func (r *Runner) rollback(ctx context.Context, m Migration) error {
 	}
 
 	return tx.Commit(ctx)
+}
+
+func mustRunOutsideTx(sql string) bool {
+	upper := strings.ToUpper(sql)
+
+	patterns := []string{
+		"CONCURRENTLY",
+		"PG_CREATE_LOGICAL_REPLICATION_SLOT",
+		"PG_DROP_REPLICATION_SLOT",
+		"CREATE PUBLICATION",
+		"DROP PUBLICATION",
+	}
+
+	for _, p := range patterns {
+		if strings.Contains(upper, p) {
+			return true
+		}
+	}
+
+	return false
 }
