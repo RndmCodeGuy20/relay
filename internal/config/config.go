@@ -7,6 +7,7 @@ type Config struct {
 	Server   ServerConfig
 	Logging  LoggingConfig
 	Otel     OtelConfig
+	Relay    RelayConfig
 }
 
 type PostgresConfig struct {
@@ -24,7 +25,7 @@ type PostgresConfig struct {
 
 type ServerConfig struct {
 	Host           string `env:"SERVER_HOST" envDefault:"0.0.0.0"`
-	Port           int    `env:"SERVER_PORT" envDefault:"8080"`
+	Port           int    `env:"SERVER_PORT" envDefault:"5972"`
 	MaxConcurrency int64  `env:"SERVER_MAX_CONCURRENCY" envDefault:"1000"`
 	ReadTimeout    int    `env:"SERVER_READ_TIMEOUT_SEC" envDefault:"5"`
 	WriteTimeout   int    `env:"SERVER_WRITE_TIMEOUT_SEC" envDefault:"10"`
@@ -38,4 +39,12 @@ type LoggingConfig struct {
 type OtelConfig struct {
 	ExporterEndpoint string `env:"OTEL_EXPORTER_ENDPOINT" envDefault:"http://localhost:4317"`
 	ServiceName      string `env:"OTEL_SERVICE_NAME" envDefault:"relay"`
+}
+
+type RelayConfig struct {
+	SlotName       string `env:"RELAY_SLOT_NAME" envDefault:"relay_slot"`
+	StatusInterval int    `env:"RELAY_STATUS_INTERVAL_SEC" envDefault:"10"`
+	OutboxTable    string `env:"RELAY_OUTBOX_TABLE" envDefault:"outbox_events"`
+	MaxRetries     int    `env:"RELAY_MAX_RETRIES" envDefault:"3"`
+	Workers        int    `env:"RELAY_WORKERS" envDefault:"3"`
 }

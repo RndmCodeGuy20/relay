@@ -19,7 +19,9 @@ import (
 	"rndmcodeguy.in/relay/internal/otel"
 	"rndmcodeguy.in/relay/internal/outbox"
 	"rndmcodeguy.in/relay/internal/postgres"
+	"rndmcodeguy.in/relay/internal/relay"
 	"rndmcodeguy.in/relay/internal/server"
+	"rndmcodeguy.in/relay/internal/stream"
 )
 
 var (
@@ -85,6 +87,7 @@ func main() {
 	// Log the resolved OTEL endpoint so it's easy to debug misconfigured env vars.
 	// This now goes through the OTel log provider as well.
 	l.Info("using OTEL endpoint", zap.String("endpoint", otelEndpoint))
+	ctx = logger.WithLogger(ctx, l)
 
 	l.Info("starting relay service",
 		zap.Int("port", cfg.Server.Port),
@@ -116,6 +119,26 @@ func main() {
 	outboxWriter := outbox.NewPostgresOutboxWriter()
 	ingestionService := ingestion.NewIngestionService(outboxWriter, db.Pool())
 	ingestionHandler := ingestion.NewIngestionHandler(ingestionService)
+	streamPublisher := stream.NewLoggingStream()
+	replicationDSN := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=disable&replication=database",
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.DBName,
+	)
+
+	relayService, err := relay.NewRelayService(ctx, streamPublisher, db.Pool(), replicationDSN, cfg.Relay)
+	if err != nil {
+		l.Fatal("failed to initialize relay service", zap.Error(err))
+	}
+
+	go func() {
+		if err := relayService.Run(ctx, 0); err != nil && err != context.Canceled {
+			l.Error("relay service exited", zap.Error(err))
+		}
+	}()
 
 	// 3. Initialize and start HTTP server
 	srv := server.New(ctx, cfg.Server, l, func(r chi.Router) {
