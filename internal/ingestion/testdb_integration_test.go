@@ -4,6 +4,7 @@ package ingestion_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,15 +14,20 @@ import (
 	"rndmcodeguy.in/relay/internal/postgres/migrations"
 )
 
-const testDatabaseURLEnv = "RELAY_TEST_DATABASE_URL"
-
 func openIntegrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv(testDatabaseURLEnv)
-	if dsn == "" {
-		t.Skip("integration test skipped: RELAY_TEST_DATABASE_URL is not set")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+
+	if dbHost == "" || dbPort == "" || dbName == "" || dbUser == "" || dbPassword == "" {
+		t.Skip("integration test skipped: one or more database environment variables are not set")
 	}
+
+	dsn := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
