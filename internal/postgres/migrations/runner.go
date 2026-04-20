@@ -52,7 +52,11 @@ func (r *Runner) Up(ctx context.Context, migrations []Migration) error {
 	if err := acquireLock(ctx, r.pool); err != nil {
 		return err
 	}
-	defer releaseLock(ctx, r.pool)
+	defer func() {
+		if err := releaseLock(ctx, r.pool); err != nil && r.logger != nil {
+			r.logger.Warn("failed to release migration advisory lock", zap.Error(err))
+		}
+	}()
 
 	if err := r.ensureTable(ctx); err != nil {
 		return err
@@ -86,7 +90,11 @@ func (r *Runner) Down(ctx context.Context, migrations []Migration, steps int) er
 	if err := acquireLock(ctx, r.pool); err != nil {
 		return err
 	}
-	defer releaseLock(ctx, r.pool)
+	defer func() {
+		if err := releaseLock(ctx, r.pool); err != nil && r.logger != nil {
+			r.logger.Warn("failed to release migration advisory lock", zap.Error(err))
+		}
+	}()
 
 	rows, err := r.pool.Query(ctx,
 		`SELECT version FROM schema_migrations ORDER BY version DESC LIMIT $1`, steps)
@@ -132,10 +140,15 @@ func (r *Runner) Down(ctx context.Context, migrations []Migration, steps int) er
 func (r *Runner) apply(ctx context.Context, m Migration) error {
 	sql := m.UpSQL
 
-	// Detect CONCURRENTLY → must run outside tx
-	if strings.Contains(strings.ToUpper(sql), "CONCURRENTLY") {
-		if _, err := r.pool.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("exec (non-tx): %w", err)
+	if mustRunOutsideTx(sql) {
+		// Split statements on semicolons and execute individually.
+		// This ensures that writes (like CREATE PUBLICATION) are committed
+		// before operations that require a clean transaction (like creating replication slots).
+		stmts := splitStatements(sql)
+		for _, stmt := range stmts {
+			if _, err := r.pool.Exec(ctx, stmt); err != nil {
+				return fmt.Errorf("exec (non-tx): %w", err)
+			}
 		}
 	} else {
 		tx, err := r.pool.Begin(ctx)
@@ -144,7 +157,9 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 		}
 
 		if _, err := tx.Exec(ctx, sql); err != nil {
-			_ = tx.Rollback(ctx)
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return fmt.Errorf("exec migration: %w; rollback: %v", err, rbErr)
+			}
 			return err
 		}
 
@@ -152,7 +167,9 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 			`INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`,
 			m.Version, m.Name,
 		); err != nil {
-			_ = tx.Rollback(ctx)
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return fmt.Errorf("record migration %d: %w; rollback: %v", m.Version, err, rbErr)
+			}
 			return err
 		}
 
@@ -168,22 +185,71 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 }
 
 func (r *Runner) rollback(ctx context.Context, m Migration) error {
+	if mustRunOutsideTx(m.DownSQL) {
+		if _, err := r.pool.Exec(ctx, m.DownSQL); err != nil {
+			return fmt.Errorf("exec down (non-tx): %w", err)
+		}
+
+		_, err := r.pool.Exec(ctx,
+			`DELETE FROM schema_migrations WHERE version = $1`, m.Version,
+		)
+		return err
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 
 	if _, err := tx.Exec(ctx, m.DownSQL); err != nil {
-		_ = tx.Rollback(ctx)
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("exec down migration %d: %w; rollback: %v", m.Version, err, rbErr)
+		}
 		return err
 	}
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM schema_migrations WHERE version = $1`, m.Version,
 	); err != nil {
-		_ = tx.Rollback(ctx)
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("delete migration row %d: %w; rollback: %v", m.Version, err, rbErr)
+		}
 		return err
 	}
 
 	return tx.Commit(ctx)
+}
+
+func mustRunOutsideTx(sql string) bool {
+	upper := strings.ToUpper(sql)
+
+	patterns := []string{
+		"CONCURRENTLY",
+		"PG_CREATE_LOGICAL_REPLICATION_SLOT",
+		"PG_DROP_REPLICATION_SLOT",
+		"CREATE PUBLICATION",
+		"DROP PUBLICATION",
+	}
+
+	for _, p := range patterns {
+		if strings.Contains(upper, p) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// splitStatements splits SQL on semicolons and returns non-empty, trimmed statements.
+// This is used to execute multiple statements in sequence when outside a transaction.
+func splitStatements(sql string) []string {
+	parts := strings.Split(sql, ";")
+	var stmts []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			stmts = append(stmts, trimmed)
+		}
+	}
+	return stmts
 }

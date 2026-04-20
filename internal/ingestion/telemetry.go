@@ -66,11 +66,15 @@ func mustInt64Counter(name, description, unit string) metric.Int64Counter {
 	}
 
 	fallbackMeter := noop.MeterProvider{}.Meter("relay/internal/ingestion")
-	fallbackCounter, _ := fallbackMeter.Int64Counter(
+	fallbackCounter, fallbackErr := fallbackMeter.Int64Counter(
 		name,
 		metric.WithDescription(description),
 		metric.WithUnit(unit),
 	)
+	if fallbackErr != nil {
+		return noop.Int64Counter{}
+	}
+
 	return fallbackCounter
 }
 
@@ -85,11 +89,15 @@ func mustFloat64Histogram(name, description, unit string) metric.Float64Histogra
 	}
 
 	fallbackMeter := noop.MeterProvider{}.Meter("relay/internal/ingestion")
-	fallbackHistogram, _ := fallbackMeter.Float64Histogram(
+	fallbackHistogram, fallbackErr := fallbackMeter.Float64Histogram(
 		name,
 		metric.WithDescription(description),
 		metric.WithUnit(unit),
 	)
+	if fallbackErr != nil {
+		return noop.Float64Histogram{}
+	}
+
 	return fallbackHistogram
 }
 

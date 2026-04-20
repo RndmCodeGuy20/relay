@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type StreamPublish struct {
+type Publish struct {
 	EventID     uuid.UUID
 	RelayID     uuid.UUID
 	LSN         string
@@ -16,5 +16,5 @@ type StreamPublish struct {
 }
 
 type Stream interface {
-	Publish(ctx context.Context, event *StreamPublish) error
+	Publish(ctx context.Context, event *Publish) error
 }

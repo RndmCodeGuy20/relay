@@ -18,23 +18,23 @@ import (
 	"rndmcodeguy.in/relay/internal/postgres"
 )
 
-type IngestionService interface {
-	Ingest(ctx context.Context, event outbox.OutboxEventInsert) error
+type Service interface {
+	Ingest(ctx context.Context, event outbox.EventInsert) error
 }
 
-type IngestionServiceImpl struct {
-	writer outbox.OutboxWriter
+type ServiceImpl struct {
+	writer outbox.Writer
 	pool   *pgxpool.Pool
 }
 
-func NewIngestionService(writer outbox.OutboxWriter, pool *pgxpool.Pool) *IngestionServiceImpl {
-	return &IngestionServiceImpl{
+func NewIngestionService(writer outbox.Writer, pool *pgxpool.Pool) *ServiceImpl {
+	return &ServiceImpl{
 		writer: writer,
 		pool:   pool,
 	}
 }
 
-func (s *IngestionServiceImpl) Ingest(ctx context.Context, event outbox.OutboxEventInsert) error {
+func (s *ServiceImpl) Ingest(ctx context.Context, event outbox.EventInsert) error {
 	ctx, span := startIngestionSpan(ctx, "ingestion.service.ingest",
 		trace.WithAttributes(
 			attribute.String("ingestion.event_id", event.EventID.String()),

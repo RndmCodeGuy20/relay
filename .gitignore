@@ -68,3 +68,6 @@ temp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+nats/*.exe
+nats/data/

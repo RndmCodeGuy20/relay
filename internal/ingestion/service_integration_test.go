@@ -26,7 +26,7 @@ func TestIngest_PersistsEvent(t *testing.T) {
 	payload := json.RawMessage(`{"order_id":"A-1001","status":"created"}`)
 	receivedAt := time.Now().UTC().Truncate(time.Microsecond)
 
-	event := outbox.OutboxEventInsert{
+	event := outbox.EventInsert{
 		EventID:       eventID,
 		EventType:     "order.created",
 		Payload:       payload,
@@ -106,7 +106,7 @@ func TestIngest_ReturnsDuplicateAppError(t *testing.T) {
 
 	svc := ingestion.NewIngestionService(outbox.NewPostgresOutboxWriter(), pool)
 
-	event := outbox.OutboxEventInsert{
+	event := outbox.EventInsert{
 		EventID:       uuid.New(),
 		EventType:     "order.updated",
 		Payload:       json.RawMessage(`{"order_id":"A-1001","status":"paid"}`),
@@ -144,7 +144,7 @@ func TestIngest_PersistsOccurredAt(t *testing.T) {
 	svc := ingestion.NewIngestionService(outbox.NewPostgresOutboxWriter(), pool)
 
 	occurredAt := time.Now().UTC().Truncate(time.Microsecond)
-	event := outbox.OutboxEventInsert{
+	event := outbox.EventInsert{
 		EventID:       uuid.New(),
 		EventType:     "inventory.adjusted",
 		Payload:       json.RawMessage(`{"sku":"ABC-123","delta":-3}`),

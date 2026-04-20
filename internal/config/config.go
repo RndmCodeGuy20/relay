@@ -8,6 +8,7 @@ type Config struct {
 	Logging  LoggingConfig
 	Otel     OtelConfig
 	Relay    RelayConfig
+	NATS     NATSConfig
 }
 
 type PostgresConfig struct {
@@ -47,4 +48,15 @@ type RelayConfig struct {
 	OutboxTable    string `env:"RELAY_OUTBOX_TABLE" envDefault:"outbox_events"`
 	MaxRetries     int    `env:"RELAY_MAX_RETRIES" envDefault:"3"`
 	Workers        int    `env:"RELAY_WORKERS" envDefault:"3"`
+}
+
+type NATSConfig struct {
+	URL               string `env:"NATS_URL,required"`
+	StreamName        string `env:"NATS_STREAM_NAME" envDefault:"RELAY"`
+	Subject           string `env:"NATS_SUBJECT" envDefault:"relay.events"`
+	ConnectTimeoutSec int    `env:"NATS_CONNECT_TIMEOUT_SEC" envDefault:"5"`
+	PublishTimeoutSec int    `env:"NATS_PUBLISH_TIMEOUT_SEC" envDefault:"5"`
+	MaxReconnects     int    `env:"NATS_MAX_RECONNECTS" envDefault:"-1"`
+	ReconnectWaitMs   int    `env:"NATS_RECONNECT_WAIT_MS" envDefault:"2000"`
+	DrainTimeoutSec   int    `env:"NATS_DRAIN_TIMEOUT_SEC" envDefault:"10"`
 }

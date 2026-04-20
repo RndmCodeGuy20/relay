@@ -13,7 +13,7 @@ func NewLoggingStream() *LoggingStream {
 	return &LoggingStream{}
 }
 
-func (s *LoggingStream) Publish(ctx context.Context, event *StreamPublish) error {
+func (s *LoggingStream) Publish(ctx context.Context, event *Publish) error {
 	log := logger.FromContext(ctx)
 	log.Info(
 		"stream publish",

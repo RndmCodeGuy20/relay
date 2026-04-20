@@ -95,7 +95,7 @@ POST {{host}}{{ingestPath}}
 Content-Type: application/json
 
 {
-  "event_id": "66666666-6666-6666-6666-666666666666",
+  "event_id": "66666666-6666-6666-6666-666666666667",
   "event_type": "customer.updated",
   "source": "identity-service",
   "schema_version": "v1",

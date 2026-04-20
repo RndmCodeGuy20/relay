@@ -30,6 +30,9 @@ func main() {
 
 	log.Info("starting migration command", zap.String("command", command))
 	cfg, err := config.Load()
+	if err != nil {
+		panic(err)
+	}
 
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=disable",

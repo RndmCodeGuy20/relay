@@ -23,7 +23,7 @@ import (
 	"rndmcodeguy.in/relay/internal/stream"
 )
 
-type RelayService struct {
+type Service struct {
 	conn           *pgconn.PgConn
 	dispatcher     *dispatch.Dispatcher
 	slotName       string
@@ -40,7 +40,7 @@ type relationInfo struct {
 	columns   []string
 }
 
-func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, replicationDSN string, cfg config.RelayConfig) (*RelayService, error) {
+func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, replicationDSN string, cfg config.RelayConfig) (*Service, error) {
 	replConn, err := pgconn.Connect(ctx, replicationDSN)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, r
 	dispatcher := dispatch.New(cfg.Workers, s, pool, cfg.MaxRetries)
 	outboxSchema, outboxTable := splitQualifiedTableName(cfg.OutboxTable)
 
-	return &RelayService{
+	return &Service{
 		conn:           replConn,
 		dispatcher:     dispatcher,
 		slotName:       cfg.SlotName,
@@ -61,7 +61,7 @@ func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, r
 	}, nil
 }
 
-func (s *RelayService) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
+func (s *Service) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
 	log := logger.FromContext(ctx)
 
 	go func() {
@@ -182,7 +182,7 @@ func (s *RelayService) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
 	}
 }
 
-func (s *RelayService) decodeWALMessage(walData []byte, lsn pglogrepl.LSN) (*event.RelayEvent, error) {
+func (s *Service) decodeWALMessage(walData []byte, lsn pglogrepl.LSN) (*event.RelayEvent, error) {
 	msg, err := pglogrepl.ParseV2(walData, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse logical replication message: %w", err)
@@ -204,7 +204,7 @@ func (s *RelayService) decodeWALMessage(walData []byte, lsn pglogrepl.LSN) (*eve
 	}
 }
 
-func (s *RelayService) cacheRelation(msg *pglogrepl.RelationMessage) {
+func (s *Service) cacheRelation(msg *pglogrepl.RelationMessage) {
 	columns := make([]string, len(msg.Columns))
 	for i, c := range msg.Columns {
 		columns[i] = c.Name
@@ -212,7 +212,7 @@ func (s *RelayService) cacheRelation(msg *pglogrepl.RelationMessage) {
 	s.relations[msg.RelationID] = relationInfo{namespace: msg.Namespace, table: msg.RelationName, columns: columns}
 }
 
-func (s *RelayService) cacheRelationV2(msg *pglogrepl.RelationMessageV2) {
+func (s *Service) cacheRelationV2(msg *pglogrepl.RelationMessageV2) {
 	columns := make([]string, len(msg.Columns))
 	for i, c := range msg.Columns {
 		columns[i] = c.Name
@@ -220,7 +220,7 @@ func (s *RelayService) cacheRelationV2(msg *pglogrepl.RelationMessageV2) {
 	s.relations[msg.RelationID] = relationInfo{namespace: msg.Namespace, table: msg.RelationName, columns: columns}
 }
 
-func (s *RelayService) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleData, lsn pglogrepl.LSN) (*event.RelayEvent, error) {
+func (s *Service) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleData, lsn pglogrepl.LSN) (*event.RelayEvent, error) {
 	if tuple == nil {
 		return nil, nil
 	}
