@@ -12,8 +12,8 @@ import (
 
 var outboxTracer = otel.Tracer("relay/internal/outbox")
 
-type OutboxWriter interface {
-	Write(ctx context.Context, tx pgx.Tx, event OutboxEventInsert) error
+type Writer interface {
+	Write(ctx context.Context, tx pgx.Tx, event EventInsert) error
 }
 
 type PostgresOutboxWriter struct{}
@@ -22,7 +22,7 @@ func NewPostgresOutboxWriter() *PostgresOutboxWriter {
 	return &PostgresOutboxWriter{}
 }
 
-func (w *PostgresOutboxWriter) Write(ctx context.Context, tx pgx.Tx, event OutboxEventInsert) error {
+func (w *PostgresOutboxWriter) Write(ctx context.Context, tx pgx.Tx, event EventInsert) error {
 	ctx, span := outboxTracer.Start(ctx, "outbox.write",
 		trace.WithAttributes(
 			attribute.String("db.system", "postgresql"),

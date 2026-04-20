@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type OutboxEventInsert struct {
+type EventInsert struct {
 	EventID       uuid.UUID       `json:"event_id"`
 	EventType     string          `json:"event_type"`
 	Payload       json.RawMessage `json:"payload"`
@@ -17,7 +17,7 @@ type OutboxEventInsert struct {
 	ReceivedAt    time.Time       `json:"received_at"`
 }
 
-type OutboxEvent struct {
+type Event struct {
 	ID            uuid.UUID       `json:"id" db:"id"`
 	EventID       uuid.UUID       `json:"event_id" db:"event_id"`
 	EventType     string          `json:"event_type" db:"event_type"`
