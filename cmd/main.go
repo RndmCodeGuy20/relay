@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	Env        string = "dev"
+	Env        = "dev"
 	Version    string
 	BuildTime  string
 	CommitHash string
@@ -119,7 +119,22 @@ func main() {
 	outboxWriter := outbox.NewPostgresOutboxWriter()
 	ingestionService := ingestion.NewIngestionService(outboxWriter, db.Pool())
 	ingestionHandler := ingestion.NewIngestionHandler(ingestionService)
-	streamPublisher := stream.NewLoggingStream()
+	natsPublisher, err := stream.NewNATSStream(ctx, cfg.NATS)
+	if err != nil {
+		l.Fatal("failed to initialize nats jetstream publisher", zap.Error(err))
+	}
+	defer func() {
+		shutdownCtx, cancelNATS := context.WithTimeout(context.Background(), time.Duration(cfg.NATS.DrainTimeoutSec)*time.Second)
+		defer cancelNATS()
+
+		if closeErr := natsPublisher.Close(shutdownCtx); closeErr != nil {
+			l.Warn("failed to close nats publisher cleanly", zap.Error(closeErr))
+		}
+	}()
+
+	l.Info("configured jetstream publisher", zap.String("url", cfg.NATS.URL), zap.String("stream", cfg.NATS.StreamName), zap.String("subject", cfg.NATS.Subject))
+
+	streamPublisher := natsPublisher
 	replicationDSN := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=disable&replication=database",
 		cfg.Postgres.User,
