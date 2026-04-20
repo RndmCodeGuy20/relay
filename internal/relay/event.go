@@ -1,6 +1,6 @@
 package relay
 
-// RelayEvent is re-exported from the event package for backward compatibility
+// Event is re-exported from the event package for package-local compatibility.
 import "rndmcodeguy.in/relay/internal/event"
 
-type RelayEvent = event.RelayEvent
+type Event = event.RelayEvent
