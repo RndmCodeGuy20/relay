@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -33,7 +34,9 @@ func loadDotEnv() {
 		files = []string{".env.local", ".env"}
 	}
 
-	_ = godotenv.Load(files...)
+	if err := godotenv.Load(files...); err != nil && !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "warning: failed to load env files %v: %v\n", files, err)
+	}
 }
 
 func getEnv(key, fallback string) string {
