@@ -17,6 +17,10 @@ func acquireLock(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func releaseLock(ctx context.Context, pool *pgxpool.Pool) {
-	_, _ = pool.Exec(ctx, `SELECT pg_advisory_unlock($1)`, advisoryLockKey)
+func releaseLock(ctx context.Context, pool *pgxpool.Pool) error {
+	if _, err := pool.Exec(ctx, `SELECT pg_advisory_unlock($1)`, advisoryLockKey); err != nil {
+		return fmt.Errorf("release lock: %w", err)
+	}
+
+	return nil
 }

@@ -26,7 +26,10 @@ func withTxOpts(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, fn 
 
 	defer func() {
 		if p := recover(); p != nil {
-			_ = tx.Rollback(ctx)
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				// Preserve the original panic while surfacing rollback failure in logs.
+				fmt.Printf("rollback after panic failed: %v\n", rbErr)
+			}
 			panic(p) // re-panic after cleanup
 		}
 	}()

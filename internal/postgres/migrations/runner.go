@@ -52,7 +52,11 @@ func (r *Runner) Up(ctx context.Context, migrations []Migration) error {
 	if err := acquireLock(ctx, r.pool); err != nil {
 		return err
 	}
-	defer releaseLock(ctx, r.pool)
+	defer func() {
+		if err := releaseLock(ctx, r.pool); err != nil && r.logger != nil {
+			r.logger.Warn("failed to release migration advisory lock", zap.Error(err))
+		}
+	}()
 
 	if err := r.ensureTable(ctx); err != nil {
 		return err
@@ -86,7 +90,11 @@ func (r *Runner) Down(ctx context.Context, migrations []Migration, steps int) er
 	if err := acquireLock(ctx, r.pool); err != nil {
 		return err
 	}
-	defer releaseLock(ctx, r.pool)
+	defer func() {
+		if err := releaseLock(ctx, r.pool); err != nil && r.logger != nil {
+			r.logger.Warn("failed to release migration advisory lock", zap.Error(err))
+		}
+	}()
 
 	rows, err := r.pool.Query(ctx,
 		`SELECT version FROM schema_migrations ORDER BY version DESC LIMIT $1`, steps)
@@ -143,7 +151,9 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 		}
 
 		if _, err := tx.Exec(ctx, sql); err != nil {
-			_ = tx.Rollback(ctx)
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return fmt.Errorf("exec migration: %w; rollback: %v", err, rbErr)
+			}
 			return err
 		}
 
@@ -151,7 +161,9 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 			`INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`,
 			m.Version, m.Name,
 		); err != nil {
-			_ = tx.Rollback(ctx)
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return fmt.Errorf("record migration %d: %w; rollback: %v", m.Version, err, rbErr)
+			}
 			return err
 		}
 
@@ -184,14 +196,18 @@ func (r *Runner) rollback(ctx context.Context, m Migration) error {
 	}
 
 	if _, err := tx.Exec(ctx, m.DownSQL); err != nil {
-		_ = tx.Rollback(ctx)
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("exec down migration %d: %w; rollback: %v", m.Version, err, rbErr)
+		}
 		return err
 	}
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM schema_migrations WHERE version = $1`, m.Version,
 	); err != nil {
-		_ = tx.Rollback(ctx)
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("delete migration row %d: %w; rollback: %v", m.Version, err, rbErr)
+		}
 		return err
 	}
 
