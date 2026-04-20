@@ -2,6 +2,7 @@ package respond
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -24,7 +25,9 @@ type FieldError struct {
 func write(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		log.Printf("respond: failed to encode response body: %v", err)
+	}
 }
 
 func OK[T any](w http.ResponseWriter, data T) {

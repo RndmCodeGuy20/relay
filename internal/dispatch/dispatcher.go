@@ -142,9 +142,9 @@ func (d *Dispatcher) insertTask(ctx context.Context, event *event.RelayEvent) er
 	return err
 }
 
-// publishEvent converts RelayEvent to StreamPublish and publishes to stream
+// publishEvent converts RelayEvent to stream.Publish and publishes to stream.
 func (d *Dispatcher) publishEvent(ctx context.Context, event *event.RelayEvent) error {
-	sp := &stream.StreamPublish{
+	sp := &stream.Publish{
 		EventID:     event.EventID,
 		RelayID:     event.RelayID,
 		LSN:         event.LSN.String(),
