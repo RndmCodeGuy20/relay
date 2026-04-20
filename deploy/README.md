@@ -7,6 +7,7 @@ Replace `REMOTE_HOST` (e.g. `192.168.1.50`) and `USER` with real values in the e
 ---
 
 ## What this stack provides (as configured)
+
 - OpenTelemetry Collector (OTLP gRPC: 4317, OTLP HTTP: 4318)
 - Collector Prometheus exporter (8889)
 - Prometheus UI (9090)
@@ -17,6 +18,7 @@ Replace `REMOTE_HOST` (e.g. `192.168.1.50`) and `USER` with real values in the e
 These services are already configured in `deploy/docker-compose.yaml` and `deploy/otel-collector-config.yaml` to run together in a single Docker Compose network.
 
 ## Important: Env var name used by the app
+
 The application binary was updated to read `OTEL_ENDPOINT` (host:port, e.g. `192.168.1.50:4317`) to send OTLP gRPC to the collector. Your existing `.env` file uses `OTEL_EXPORTER_ENDPOINT`; you can either set `OTEL_ENDPOINT` in the runtime environment, or change the key in the `.env` you load to `OTEL_ENDPOINT`.
 
 Examples in this README use `OTEL_ENDPOINT`.
@@ -149,9 +151,9 @@ If your app currently reads environment variables from a `.env` file, update tha
 - If you run Prometheus separately (on a different machine), update `deploy/prometheus.yaml` to target the remote host IP instead of `otel-collector`:
 
 ```yaml
-- job_name: 'otel-collector'
+- job_name: "otel-collector"
   static_configs:
-    - targets: ['REMOTE_HOST:8889']
+    - targets: ["REMOTE_HOST:8889"]
 ```
 
 Then restart Prometheus to pick up the new config.
@@ -212,7 +214,7 @@ docker compose logs -f otel-collector
 scp -r "D:/Backend Projects/relay/deploy" user@192.168.1.50:~/relay-deploy
 ```
 
-2. SSH and start the stack:
+1. SSH and start the stack:
 
 ```bash
 ssh user@192.168.1.50
@@ -220,14 +222,14 @@ cd ~/relay-deploy
 docker compose up -d
 ```
 
-3. On your local dev machine run the app pointing to the remote collector:
+1. On your local dev machine run the app pointing to the remote collector:
 
 ```cmd
 cd /d "D:\Backend Projects\relay"
 set OTEL_ENDPOINT=192.168.1.50:4317 && go run ./cmd
 ```
 
-4. Verify metrics endpoint:
+1. Verify metrics endpoint:
 
 ```bash
 curl http://192.168.1.50:8889/metrics
@@ -236,6 +238,7 @@ curl http://192.168.1.50:8889/metrics
 ---
 
 ## 9) Security & hardening notes
+
 - Do not expose these ports to the public internet.
 - For production, enable TLS and authentication for the collector endpoints and/or place the stack behind a VPN.
 - Lock down Grafana and Jaeger with authentication and network rules.
@@ -243,9 +246,9 @@ curl http://192.168.1.50:8889/metrics
 ---
 
 If you want, I can also:
+
 - Edit `deploy/prometheus.yaml` to use an explicit `REMOTE_HOST` instead of `otel-collector`.
 - Add a systemd service file example to run your `relay` binary and set `OTEL_ENDPOINT` at boot.
 - Add a small `deploy/compose.env` file template to centralize the HOST/PORT variables.
 
 If you'd like those, tell me which one and I will add it next.
-

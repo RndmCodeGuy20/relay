@@ -19,12 +19,12 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
 
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: "jaeger:4317"
     tls:
       insecure: true
 
-  otlphttp/loki:
+  otlp_http/loki:
     endpoint: "http://loki:3100/otlp"
     tls:
       insecure: true
@@ -35,14 +35,14 @@ exporters:
 service:
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger, debug]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, batch ]
+      exporters: [ otlp_grpc/jaeger, debug ]
     metrics:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [prometheus, debug]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, batch ]
+      exporters: [ prometheus, debug ]
     logs:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [otlphttp/loki, debug]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, batch ]
+      exporters: [ otlp_http/loki, debug ]
