@@ -141,8 +141,14 @@ func (r *Runner) apply(ctx context.Context, m Migration) error {
 	sql := m.UpSQL
 
 	if mustRunOutsideTx(sql) {
-		if _, err := r.pool.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("exec (non-tx): %w", err)
+		// Split statements on semicolons and execute individually.
+		// This ensures that writes (like CREATE PUBLICATION) are committed
+		// before operations that require a clean transaction (like creating replication slots).
+		stmts := splitStatements(sql)
+		for _, stmt := range stmts {
+			if _, err := r.pool.Exec(ctx, stmt); err != nil {
+				return fmt.Errorf("exec (non-tx): %w", err)
+			}
 		}
 	} else {
 		tx, err := r.pool.Begin(ctx)
@@ -232,4 +238,18 @@ func mustRunOutsideTx(sql string) bool {
 	}
 
 	return false
+}
+
+// splitStatements splits SQL on semicolons and returns non-empty, trimmed statements.
+// This is used to execute multiple statements in sequence when outside a transaction.
+func splitStatements(sql string) []string {
+	parts := strings.Split(sql, ";")
+	var stmts []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			stmts = append(stmts, trimmed)
+		}
+	}
+	return stmts
 }
