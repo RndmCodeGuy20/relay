@@ -16,17 +16,17 @@ import (
 	"rndmcodeguy.in/relay/internal/validate"
 )
 
-type IngestionHandler struct {
-	service IngestionService
+type Handler struct {
+	service Service
 }
 
-func NewIngestionHandler(service IngestionService) *IngestionHandler {
-	return &IngestionHandler{
+func NewIngestionHandler(service Service) *Handler {
+	return &Handler{
 		service: service,
 	}
 }
 
-func (h *IngestionHandler) HandleIngest() http.HandlerFunc {
+func (h *Handler) HandleIngest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := startIngestionSpan(r.Context(), "ingestion.handle")
 		start := time.Now()
@@ -71,7 +71,7 @@ func (h *IngestionHandler) HandleIngest() http.HandlerFunc {
 			return
 		}
 
-		event := outbox.OutboxEventInsert{
+		event := outbox.EventInsert{
 			EventID:       req.EventID,
 			EventType:     req.EventType,
 			Payload:       req.Payload,
