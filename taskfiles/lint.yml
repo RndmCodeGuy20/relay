@@ -9,9 +9,14 @@ tasks:
     cmds:
       - go vet ./...
 
+  install:
+    desc: Install golangci-lint locally
+    cmds:
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
   lint:
     cmds:
-      - golangci-lint run
+      - golangci-lint run --config .golangci.yml --timeout=5m
 
   all:
     cmds:

@@ -7,9 +7,29 @@ tasks:
 
   integration:
     cmds:
-      - go test -tags=integration ./internal/ingestion -v
+      # Default: clean, readable, closest to “Jest-like”
+      - gotestsum --format testname -- -tags=integration ./internal/ingestion
+
+      # --- Try these formats (uncomment one at a time) ---
+
+      # Minimal, grouped by package (good for large repos)
+      # - gotestsum --format pkgname -- -tags=integration ./internal/ingestion
+
+      # Dots style (fast visual feedback, like pytest)
+      # - gotestsum --format dots -- -tags=integration ./internal/ingestion
+
+      # Verbose but cleaner than raw go test
+      # - gotestsum --format standard-verbose -- -tags=integration ./internal/ingestion
+
+      # Full raw go test passthrough (if debugging deeply)
+      # - gotestsum --format standard -- -tags=integration ./internal/ingestion -v
+
+      # Generate JUnit report (useful for CI dashboards)
+      # - gotestsum --junitfile junit.xml --format testname -- -tags=integration ./internal/ingestion
+
     env:
       APP_ENV: test
+
     dotenv:
       - .env.test
       - .env

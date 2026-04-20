@@ -82,6 +82,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     services:
       postgres:
         image: postgres:16
@@ -93,9 +94,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d relay_test"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+        command: >
+          postgres
+          -c wal_level=logical
+          -c max_replication_slots=10
+          -c max_wal_senders=10
+
     env:
       DB_HOST: localhost
       DB_PORT: "5432"
@@ -103,26 +110,22 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: postgres
       APP_ENV: test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure Postgres for logical replication
-        shell: bash
+      - name: Wait for Postgres to be ready
         run: |
-          CONTAINER_ID="${{ job.services.postgres.id }}"
-
-          docker exec "$CONTAINER_ID" psql -U postgres -d relay_test -c "ALTER SYSTEM SET wal_level = 'logical';"
-          docker exec "$CONTAINER_ID" psql -U postgres -d relay_test -c "ALTER SYSTEM SET max_replication_slots = 10;"
-          docker exec "$CONTAINER_ID" psql -U postgres -d relay_test -c "ALTER SYSTEM SET max_wal_senders = 10;"
-
-          docker restart "$CONTAINER_ID"
-
-          until docker exec "$CONTAINER_ID" pg_isready -U postgres -d relay_test; do
-            sleep 1
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U postgres -d relay_test && break
+            echo "Waiting for postgres..."
+            sleep 2
           done
 
-          docker exec "$CONTAINER_ID" psql -U postgres -d relay_test -c "SHOW wal_level;"
+      - name: Verify WAL level (sanity check)
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d relay_test -c "SHOW wal_level;"
 
       - name: Set up Go
         uses: actions/setup-go@v5
