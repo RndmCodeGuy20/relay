@@ -24,6 +24,7 @@ import (
 	"rndmcodeguy.in/relay/internal/rule"
 	"rndmcodeguy.in/relay/internal/server"
 	"rndmcodeguy.in/relay/internal/stream"
+	"rndmcodeguy.in/relay/internal/worker"
 )
 
 var (
@@ -189,7 +190,30 @@ func main() {
 		}
 	}()
 
-	// 4. Initialize and start HTTP server
+	// 5. Start the dispatch_tasks worker: claims pending rows, publishes to
+	//    per-target subjects, handles retry/backoff/dead transitions.
+	wkr := worker.New(streamPublisher, db.Pool(), worker.Config{
+		Workers:           cfg.Worker.Workers,
+		ClaimBatchSize:    cfg.Worker.ClaimBatchSize,
+		ClaimInterval:     time.Duration(cfg.Worker.ClaimIntervalMs) * time.Millisecond,
+		VisibilityTimeout: time.Duration(cfg.Worker.VisibilityTimeoutSec) * time.Second,
+		ReaperInterval:    time.Duration(cfg.Worker.ReaperIntervalSec) * time.Second,
+		MaxRetries:        cfg.Worker.MaxRetries,
+		Backoff: worker.BackoffConfig{
+			Base: time.Duration(cfg.Worker.BackoffBaseMs) * time.Millisecond,
+			Max:  time.Duration(cfg.Worker.BackoffMaxSec) * time.Second,
+		},
+		PublishTimeout:    time.Duration(cfg.Worker.PublishTimeoutSec) * time.Second,
+		DoneRetention:     time.Duration(cfg.Worker.DoneRetentionDays) * 24 * time.Hour,
+		RetentionInterval: time.Duration(cfg.Worker.RetentionIntervalSec) * time.Second,
+	})
+	go func() {
+		if err := wkr.Start(ctx); err != nil && err != context.Canceled {
+			l.Error("worker exited", zap.Error(err))
+		}
+	}()
+
+	// 6. Initialize and start HTTP server
 	srv := server.New(ctx, cfg.Server, l, func(r chi.Router) {
 		r.Route("/v1", func(rr chi.Router) {
 			ingestion.RegisterRoutes(rr, ingestionHandler)

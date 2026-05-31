@@ -5,12 +5,20 @@ import (
 	"sync"
 )
 
+// MockTargetPublish records a single PublishToSubject call.
+type MockTargetPublish struct {
+	Subject  string
+	DedupKey string
+	Event    *Publish
+}
+
 // MockStream is a test-double for Stream that records publishes and allows
 // injecting messages for consumption.
 type MockStream struct {
-	mu        sync.RWMutex
-	published []*Publish
-	err       error
+	mu                 sync.RWMutex
+	published          []*Publish
+	publishedToSubject []MockTargetPublish
+	err                error
 
 	sub *MockSubscription
 }
@@ -28,6 +36,29 @@ func (m *MockStream) Publish(_ context.Context, event *Publish) error {
 	defer m.mu.Unlock()
 	m.published = append(m.published, event)
 	return m.err
+}
+
+// PublishToSubject records the subject, dedup key, and event, and returns the
+// configured error.
+func (m *MockStream) PublishToSubject(_ context.Context, subject string, dedupKey string, event *Publish) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.publishedToSubject = append(m.publishedToSubject, MockTargetPublish{
+		Subject:  subject,
+		DedupKey: dedupKey,
+		Event:    event,
+	})
+	return m.err
+}
+
+// PublishedToSubjects returns all entries recorded by PublishToSubject in
+// call order.
+func (m *MockStream) PublishedToSubjects() []MockTargetPublish {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]MockTargetPublish, len(m.publishedToSubject))
+	copy(out, m.publishedToSubject)
+	return out
 }
 
 // Subscribe returns a mock subscription.

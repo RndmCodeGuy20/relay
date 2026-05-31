@@ -135,6 +135,44 @@ func (s *NATSStream) Publish(ctx context.Context, event *Publish) error {
 	return nil
 }
 
+func (s *NATSStream) PublishToSubject(ctx context.Context, subject string, dedupKey string, event *Publish) error {
+	if event == nil {
+		return fmt.Errorf("publish stream event: nil event")
+	}
+	if strings.TrimSpace(subject) == "" {
+		return fmt.Errorf("publish stream event: subject required")
+	}
+	if strings.TrimSpace(dedupKey) == "" {
+		return fmt.Errorf("publish stream event: dedup key required")
+	}
+
+	payload, err := buildNATSPayload(event)
+	if err != nil {
+		return fmt.Errorf("marshal event payload: %w", err)
+	}
+
+	msg := nats.NewMsg(subject)
+	msg.Data = payload
+	msg.Header.Set("Content-Type", "application/json")
+	msg.Header.Set(natsMsgIDHeader, dedupKey)
+
+	publishCtx, cancel := context.WithTimeout(ctx, s.publishAfter)
+	defer cancel()
+
+	ack, err := s.js.PublishMsg(msg, nats.Context(publishCtx))
+	if err != nil {
+		return fmt.Errorf("publish to jetstream stream %q subject %q: %w", s.streamName, subject, err)
+	}
+	if ack == nil {
+		return fmt.Errorf("publish to jetstream stream %q subject %q: missing ack", s.streamName, subject)
+	}
+	if ack.Stream != "" && ack.Stream != s.streamName {
+		return fmt.Errorf("publish ack stream mismatch: got %q want %q", ack.Stream, s.streamName)
+	}
+
+	return nil
+}
+
 func (s *NATSStream) Close(ctx context.Context) error {
 	if s == nil || s.conn == nil {
 		return nil

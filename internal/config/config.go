@@ -11,6 +11,7 @@ type Config struct {
 	NATS     NATSConfig
 	Consumer ConsumerConfig
 	Rule     RuleConfig
+	Worker   WorkerConfig
 }
 
 type PostgresConfig struct {
@@ -60,6 +61,20 @@ type ConsumerConfig struct {
 
 type RuleConfig struct {
 	RefreshIntervalSec int `env:"RULE_REFRESH_INTERVAL_SEC" envDefault:"30"`
+}
+
+type WorkerConfig struct {
+	Workers              int `env:"WORKER_POOL_SIZE" envDefault:"8"`
+	ClaimBatchSize       int `env:"WORKER_CLAIM_BATCH" envDefault:"16"`
+	ClaimIntervalMs      int `env:"WORKER_CLAIM_INTERVAL_MS" envDefault:"500"`
+	VisibilityTimeoutSec int `env:"WORKER_VISIBILITY_TIMEOUT_SEC" envDefault:"30"`
+	ReaperIntervalSec    int `env:"WORKER_REAPER_INTERVAL_SEC" envDefault:"15"`
+	MaxRetries           int `env:"WORKER_MAX_RETRIES" envDefault:"5"`
+	BackoffBaseMs        int `env:"WORKER_BACKOFF_BASE_MS" envDefault:"1000"`
+	BackoffMaxSec        int `env:"WORKER_BACKOFF_MAX_SEC" envDefault:"300"`
+	PublishTimeoutSec    int `env:"WORKER_PUBLISH_TIMEOUT_SEC" envDefault:"5"`
+	DoneRetentionDays    int `env:"WORKER_DONE_RETENTION_DAYS" envDefault:"7"`
+	RetentionIntervalSec int `env:"WORKER_RETENTION_INTERVAL_SEC" envDefault:"3600"`
 }
 
 type NATSConfig struct {

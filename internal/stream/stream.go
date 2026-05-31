@@ -68,6 +68,11 @@ type Subscription interface {
 
 type Stream interface {
 	Publish(ctx context.Context, event *Publish) error
+	// PublishToSubject sends event to the given subject, using dedupKey as the
+	// JetStream Nats-Msg-Id. The worker passes dispatch_tasks.id so retried
+	// publishes of the same task dedup, while different fan-out targets for
+	// the same event do NOT dedup (each task is its own row with its own id).
+	PublishToSubject(ctx context.Context, subject string, dedupKey string, event *Publish) error
 	Subscribe(consumerGroup string) (Subscription, error)
 }
 
