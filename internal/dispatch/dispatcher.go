@@ -1,3 +1,11 @@
+//go:build never
+// +build never
+
+// Package dispatch holds the pre-Phase-3 in-process dispatcher. It is no
+// longer wired into main: the WAL relay now publishes directly to NATS and a
+// separate consumer evaluates rules. This file is intentionally excluded from
+// the build (build tag `never`) until it is either resurrected or removed.
+
 package dispatch
 
 import (

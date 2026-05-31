@@ -14,12 +14,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"rndmcodeguy.in/relay/internal/config"
+	"rndmcodeguy.in/relay/internal/consumer"
 	"rndmcodeguy.in/relay/internal/ingestion"
 	"rndmcodeguy.in/relay/internal/logger"
 	"rndmcodeguy.in/relay/internal/otel"
 	"rndmcodeguy.in/relay/internal/outbox"
 	"rndmcodeguy.in/relay/internal/postgres"
 	"rndmcodeguy.in/relay/internal/relay"
+	"rndmcodeguy.in/relay/internal/rule"
 	"rndmcodeguy.in/relay/internal/server"
 	"rndmcodeguy.in/relay/internal/stream"
 )
@@ -155,7 +157,39 @@ func main() {
 		}
 	}()
 
-	// 3. Initialize and start HTTP server
+	// 3. Build rule cache with a blocking startup load — readiness depends on
+	//    a known-good rule set. Failure here is fatal: starting the consumer
+	//    without rules would silently swallow every event.
+	ruleRepo := rule.NewPostgresRepository(db.Pool())
+	ruleCache := rule.NewCache(ruleRepo)
+	if err := ruleCache.Refresh(ctx); err != nil {
+		l.Fatal("failed initial rule cache load", zap.Error(err))
+	}
+	l.Info("rule cache loaded", zap.Time("at", ruleCache.LastRefresh()))
+
+	refreshInterval := time.Duration(cfg.Rule.RefreshIntervalSec) * time.Second
+	go func() {
+		// StartRefreshLoop performs its own initial Refresh too; we accept
+		// the redundant first call rather than copy its ticker logic here.
+		if err := ruleCache.StartRefreshLoop(ctx, refreshInterval); err != nil && err != context.Canceled {
+			l.Error("rule cache refresher exited", zap.Error(err))
+		}
+	}()
+
+	// 4. Start NATS consumer workers (evaluate rules, insert dispatch_tasks)
+	consumerWC := consumer.New(streamPublisher, db.Pool(), ruleCache, consumer.Config{
+		Workers:       cfg.Consumer.Workers,
+		BatchSize:     cfg.Consumer.BatchSize,
+		ConsumerGroup: cfg.NATS.ConsumerGroup,
+		FetchTimeout:  time.Duration(cfg.Consumer.FetchTimeoutSec) * time.Second,
+	})
+	go func() {
+		if err := consumerWC.Start(ctx); err != nil && err != context.Canceled {
+			l.Error("consumer exited", zap.Error(err))
+		}
+	}()
+
+	// 4. Initialize and start HTTP server
 	srv := server.New(ctx, cfg.Server, l, func(r chi.Router) {
 		r.Route("/v1", func(rr chi.Router) {
 			ingestion.RegisterRoutes(rr, ingestionHandler)

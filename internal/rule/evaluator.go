@@ -167,12 +167,9 @@ func resolvePath(payload any, path string) (any, bool) {
 	return current, true
 }
 
+// normalizeTarget is a no-op today; kept as the single chokepoint where a
+// matched target is converted to an intent so later additions (mode, headers,
+// templating) have one obvious place to land.
 func normalizeTarget(target Target) Target {
-	if target.Mode == "" {
-		target.Mode = TargetModePublish
-	}
-	if target.Headers == nil {
-		target.Headers = map[string]string{}
-	}
 	return target
 }

@@ -64,8 +64,8 @@ func TestEvaluateEvent_FanOutDeterministicOrder(t *testing.T) {
 		t.Fatalf("unexpected third intent ordering: %+v", result.Intents[2])
 	}
 
-	if result.Intents[0].Target.Mode != TargetModePublish {
-		t.Fatalf("expected default mode %q, got %q", TargetModePublish, result.Intents[0].Target.Mode)
+	if result.Intents[0].Target.Subject == "" {
+		t.Fatalf("expected target subject to be populated")
 	}
 }
 

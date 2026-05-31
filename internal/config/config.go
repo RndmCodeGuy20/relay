@@ -9,6 +9,8 @@ type Config struct {
 	Otel     OtelConfig
 	Relay    RelayConfig
 	NATS     NATSConfig
+	Consumer ConsumerConfig
+	Rule     RuleConfig
 }
 
 type PostgresConfig struct {
@@ -50,6 +52,16 @@ type RelayConfig struct {
 	Workers        int    `env:"RELAY_WORKERS" envDefault:"3"`
 }
 
+type ConsumerConfig struct {
+	Workers         int `env:"CONSUMER_WORKERS" envDefault:"4"`
+	BatchSize       int `env:"CONSUMER_BATCH_SIZE" envDefault:"10"`
+	FetchTimeoutSec int `env:"CONSUMER_FETCH_TIMEOUT_SEC" envDefault:"5"`
+}
+
+type RuleConfig struct {
+	RefreshIntervalSec int `env:"RULE_REFRESH_INTERVAL_SEC" envDefault:"30"`
+}
+
 type NATSConfig struct {
 	URL               string `env:"NATS_URL,required"`
 	StreamName        string `env:"NATS_STREAM_NAME" envDefault:"RELAY"`
@@ -59,4 +71,5 @@ type NATSConfig struct {
 	MaxReconnects     int    `env:"NATS_MAX_RECONNECTS" envDefault:"-1"`
 	ReconnectWaitMs   int    `env:"NATS_RECONNECT_WAIT_MS" envDefault:"2000"`
 	DrainTimeoutSec   int    `env:"NATS_DRAIN_TIMEOUT_SEC" envDefault:"10"`
+	ConsumerGroup     string `env:"NATS_CONSUMER_GROUP" envDefault:"relay-consumer"`
 }

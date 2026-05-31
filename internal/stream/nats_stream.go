@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -24,12 +25,19 @@ type NATSStream struct {
 	drainAfter   time.Duration
 }
 
+// natsPublishPayload is the on-wire JSON shape.
+//
+// outbox_id is the canonical internal id used for dedup; event_id is the
+// producer-supplied id, kept for downstream correlation.
 type natsPublishPayload struct {
-	EventID     string    `json:"event_id"`
-	RelayID     string    `json:"relay_id"`
-	LSN         string    `json:"lsn"`
-	Sequence    int64     `json:"sequence"`
-	PublishedAt time.Time `json:"published_at"`
+	OutboxID        string          `json:"outbox_id"`
+	ProducerEventID string          `json:"event_id"`
+	Source          string          `json:"source"`
+	EventType       string          `json:"event_type"`
+	Payload         json.RawMessage `json:"payload"`
+	LSN             string          `json:"lsn"`
+	Sequence        int64           `json:"sequence"`
+	PublishedAt     time.Time       `json:"published_at"`
 }
 
 func NewNATSStream(ctx context.Context, cfg config.NATSConfig) (*NATSStream, error) {
@@ -179,20 +187,97 @@ func validateNATSConfig(cfg config.NATSConfig) error {
 	return nil
 }
 
+func (s *NATSStream) Subscribe(consumerGroup string) (Subscription, error) {
+	if s == nil || s.js == nil {
+		return nil, fmt.Errorf("nats stream not initialized")
+	}
+	if s.streamName == "" {
+		return nil, fmt.Errorf("stream name not configured")
+	}
+	if s.subject == "" {
+		return nil, fmt.Errorf("subject not configured")
+	}
+	if consumerGroup == "" {
+		return nil, fmt.Errorf("consumer group required for subscribe")
+	}
+
+	sub, err := s.js.PullSubscribe(s.subject, consumerGroup, nats.BindStream(s.streamName))
+	if err != nil {
+		return nil, fmt.Errorf("pull subscribe stream=%q subject=%q group=%q: %w", s.streamName, s.subject, consumerGroup, err)
+	}
+
+	return &natsSubscription{sub: sub}, nil
+}
+
+// NATSSubscription wraps a NATS pull subscription.
+type natsSubscription struct {
+	sub *nats.Subscription
+}
+
+// Fetch pulls up to batch messages from NATS JetStream.
+func (ns *natsSubscription) Fetch(ctx context.Context, batch int) ([]*Message, error) {
+	var opts []nats.PullOpt
+	if deadline, ok := ctx.Deadline(); ok {
+		opts = append(opts, nats.MaxWait(time.Until(deadline)))
+	}
+
+	msgs, err := ns.sub.Fetch(batch, opts...)
+	if err != nil {
+		if errors.Is(err, nats.ErrTimeout) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fetch from nats: %w", err)
+	}
+
+	result := make([]*Message, len(msgs))
+	for i, msg := range msgs {
+		result[i] = newMessage(msg)
+	}
+	return result, nil
+}
+
+// Close unsubscribes from NATS.
+func (ns *natsSubscription) Close() error {
+	return ns.sub.Unsubscribe()
+}
+
+func newMessage(msg *nats.Msg) *Message {
+	headers := make(map[string]string)
+	for k, v := range msg.Header {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
+	}
+	return &Message{
+		Data:    msg.Data,
+		Subject: msg.Subject,
+		Headers: headers,
+		ack:     func() error { return msg.Ack() },
+		nak:     func() error { return msg.Nak() },
+		term:    func() error { return msg.Term() },
+	}
+}
+
 func buildNATSPayload(event *Publish) ([]byte, error) {
 	payload := natsPublishPayload{
-		EventID:     event.EventID.String(),
-		RelayID:     event.RelayID.String(),
-		LSN:         event.LSN,
-		Sequence:    event.Sequence,
-		PublishedAt: event.PublishedAt.UTC(),
+		OutboxID:        event.OutboxID.String(),
+		ProducerEventID: event.ProducerEventID.String(),
+		Source:          event.Source,
+		EventType:       event.EventType,
+		Payload:         json.RawMessage(event.Payload),
+		LSN:             event.LSN,
+		Sequence:        event.Sequence,
+		PublishedAt:     event.PublishedAt.UTC(),
 	}
 
 	return json.Marshal(payload)
 }
 
+// streamMessageID returns the dedup key for JetStream. It is the canonical
+// internal id (outbox PK), so replays of the same outbox row from the WAL
+// always produce the same message id and JetStream dedups them.
 func streamMessageID(event *Publish) string {
-	return fmt.Sprintf("%s:%s", event.EventID.String(), event.RelayID.String())
+	return event.OutboxID.String()
 }
 
 func isSubjectCovered(patterns []string, subject string) bool {

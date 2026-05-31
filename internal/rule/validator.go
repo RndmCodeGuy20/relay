@@ -36,9 +36,6 @@ func (r Rule) Validate() error {
 		if target.Subject == "" {
 			errs = append(errs, validate.Field(fieldPrefix+".subject", "is required"))
 		}
-		if target.Mode != "" && target.Mode != TargetModePublish {
-			errs = append(errs, validate.Field(fieldPrefix+".mode", "must be publish when provided"))
-		}
 		if _, exists := targetNames[target.Name]; target.Name != "" && exists {
 			errs = append(errs, validate.Field(fieldPrefix+".name", "must be unique within a rule"))
 		}

@@ -2,7 +2,6 @@ package relay
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,7 +16,6 @@ import (
 	"go.uber.org/zap"
 	"rndmcodeguy.in/relay/internal/apperror"
 	"rndmcodeguy.in/relay/internal/config"
-	"rndmcodeguy.in/relay/internal/dispatch"
 	"rndmcodeguy.in/relay/internal/event"
 	"rndmcodeguy.in/relay/internal/logger"
 	"rndmcodeguy.in/relay/internal/stream"
@@ -25,7 +23,7 @@ import (
 
 type Service struct {
 	conn           *pgconn.PgConn
-	dispatcher     *dispatch.Dispatcher
+	publisher      stream.Stream
 	slotName       string
 	currentLSN     pglogrepl.LSN
 	outboxTable    string
@@ -46,12 +44,11 @@ func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, r
 		return nil, err
 	}
 
-	dispatcher := dispatch.New(cfg.Workers, s, pool, cfg.MaxRetries)
 	outboxSchema, outboxTable := splitQualifiedTableName(cfg.OutboxTable)
 
 	return &Service{
 		conn:           replConn,
-		dispatcher:     dispatcher,
+		publisher:      s,
 		slotName:       cfg.SlotName,
 		currentLSN:     0,
 		outboxTable:    outboxTable,
@@ -63,12 +60,6 @@ func NewRelayService(ctx context.Context, s stream.Stream, pool *pgxpool.Pool, r
 
 func (s *Service) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
 	log := logger.FromContext(ctx)
-
-	go func() {
-		if err := s.dispatcher.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			log.Error("dispatcher exited with error", zap.Error(err))
-		}
-	}()
 
 	sysIdentify, err := pglogrepl.IdentifySystem(ctx, s.conn)
 	if err != nil {
@@ -164,14 +155,17 @@ func (s *Service) Run(ctx context.Context, startLSN pglogrepl.LSN) error {
 					continue
 				}
 
-				if err := s.dispatcher.Submit(ctx, ev); err != nil {
-					log.Error("failed to submit event to dispatcher", zap.Error(err), zap.String("event_id", ev.EventID.String()))
-					continue
-				}
-
-				result := <-ev.Done
-				if result != nil {
-					log.Debug("event delivery failed, moved to DLQ", zap.String("event_id", ev.EventID.String()))
+				if err := s.publisher.Publish(ctx, &stream.Publish{
+					OutboxID:        ev.OutboxID,
+					ProducerEventID: ev.ProducerEventID,
+					Source:          ev.Source,
+					EventType:       ev.EventType,
+					Payload:         ev.Payload,
+					LSN:             ev.LSN.String(),
+					Sequence:        ev.Sequence,
+					PublishedAt:     time.Now().UTC(),
+				}); err != nil {
+					log.Error("failed to publish event to stream", zap.Error(err), zap.String("outbox_id", ev.OutboxID.String()))
 					continue
 				}
 				s.currentLSN = ev.LSN
@@ -233,7 +227,7 @@ func (s *Service) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleDat
 		return nil, nil
 	}
 
-	outboxID, ok, err := readTupleColumn(tuple, rel.columns, "id")
+	outboxIDStr, ok, err := readTupleColumn(tuple, rel.columns, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +235,21 @@ func (s *Service) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleDat
 		return nil, fmt.Errorf("outbox insert missing required id column")
 	}
 
-	eventID, err := uuid.Parse(outboxID)
+	outboxID, err := uuid.Parse(outboxIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid outbox id %q: %w", outboxID, err)
+		return nil, fmt.Errorf("invalid outbox id %q: %w", outboxIDStr, err)
+	}
+
+	producerEventIDStr, ok, err := readTupleColumn(tuple, rel.columns, "event_id")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("outbox insert missing required event_id column")
+	}
+	producerEventID, err := uuid.Parse(producerEventIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid producer event_id %q: %w", producerEventIDStr, err)
 	}
 
 	eventType, _, err := readTupleColumn(tuple, rel.columns, "event_type")
@@ -253,6 +259,13 @@ func (s *Service) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleDat
 	source, _, err := readTupleColumn(tuple, rel.columns, "source")
 	if err != nil {
 		return nil, err
+	}
+
+	payload := []byte{}
+	if payloadText, hasPayload, payloadErr := readTupleColumn(tuple, rel.columns, "payload"); payloadErr != nil {
+		return nil, payloadErr
+	} else if hasPayload {
+		payload = []byte(payloadText)
 	}
 
 	sequence := int64(0)
@@ -267,16 +280,17 @@ func (s *Service) decodeInsertTuple(relationID uint32, tuple *pglogrepl.TupleDat
 	}
 
 	return &event.RelayEvent{
-		EventID:    eventID,
-		RelayID:    uuid.New(),
-		EventType:  eventType,
-		Source:     source,
-		LSN:        lsn,
-		Sequence:   sequence,
-		ReceivedAt: time.Now().UTC(),
-		Done:       make(chan error, 1),
-		Deadline:   time.Now().Add(30 * time.Second),
-		Attempt:    0,
+		OutboxID:        outboxID,
+		ProducerEventID: producerEventID,
+		EventType:       eventType,
+		Source:          source,
+		Payload:         payload,
+		LSN:             lsn,
+		Sequence:        sequence,
+		ReceivedAt:      time.Now().UTC(),
+		Done:            make(chan error, 1),
+		Deadline:        time.Now().Add(30 * time.Second),
+		Attempt:         0,
 	}, nil
 }
 

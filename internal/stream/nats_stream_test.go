@@ -90,11 +90,14 @@ func TestIsSubjectCovered(t *testing.T) {
 func TestBuildNATSPayload(t *testing.T) {
 	ts := time.Date(2026, 4, 20, 9, 15, 30, 0, time.FixedZone("TZ", 5*60*60+30*60))
 	e := &Publish{
-		EventID:     uuid.MustParse("8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f"),
-		RelayID:     uuid.MustParse("4466a295-f11f-4893-a805-86db1fa399cd"),
-		LSN:         "0/16B6D80",
-		Sequence:    42,
-		PublishedAt: ts,
+		OutboxID:        uuid.MustParse("8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f"),
+		ProducerEventID: uuid.MustParse("4466a295-f11f-4893-a805-86db1fa399cd"),
+		Source:          "orders",
+		EventType:       "order.created",
+		Payload:         []byte(`{"total":42}`),
+		LSN:             "0/16B6D80",
+		Sequence:        42,
+		PublishedAt:     ts,
 	}
 
 	data, err := buildNATSPayload(e)
@@ -107,11 +110,17 @@ func TestBuildNATSPayload(t *testing.T) {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
 
-	if payload["event_id"] != e.EventID.String() {
+	if payload["outbox_id"] != e.OutboxID.String() {
+		t.Fatalf("unexpected outbox_id: %v", payload["outbox_id"])
+	}
+	if payload["event_id"] != e.ProducerEventID.String() {
 		t.Fatalf("unexpected event_id: %v", payload["event_id"])
 	}
-	if payload["relay_id"] != e.RelayID.String() {
-		t.Fatalf("unexpected relay_id: %v", payload["relay_id"])
+	if payload["source"] != e.Source {
+		t.Fatalf("unexpected source: %v", payload["source"])
+	}
+	if payload["event_type"] != e.EventType {
+		t.Fatalf("unexpected event_type: %v", payload["event_type"])
 	}
 	if payload["lsn"] != e.LSN {
 		t.Fatalf("unexpected lsn: %v", payload["lsn"])
@@ -124,14 +133,17 @@ func TestBuildNATSPayload(t *testing.T) {
 	}
 }
 
-func TestStreamMessageIDDeterministic(t *testing.T) {
+func TestStreamMessageIDIsOutboxIDOnly(t *testing.T) {
+	// The dedup key is the canonical internal id (outbox PK). Replays of the
+	// same outbox row from the WAL must produce a stable message id so
+	// JetStream can dedup them.
 	e := &Publish{
-		EventID: uuid.MustParse("8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f"),
-		RelayID: uuid.MustParse("4466a295-f11f-4893-a805-86db1fa399cd"),
+		OutboxID:        uuid.MustParse("8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f"),
+		ProducerEventID: uuid.MustParse("4466a295-f11f-4893-a805-86db1fa399cd"),
 	}
 
 	got := streamMessageID(e)
-	want := "8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f:4466a295-f11f-4893-a805-86db1fa399cd"
+	want := "8d035f6e-5dcf-4642-81b9-c7bf3b2cc57f"
 	if got != want {
 		t.Fatalf("unexpected message id: got %q want %q", got, want)
 	}

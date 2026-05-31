@@ -1,7 +1,9 @@
 package rule
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +15,6 @@ const (
 	OperatorIn       = "in"
 	OperatorContains = "contains"
 	OperatorExists   = "exists"
-
-	TargetModePublish = "publish"
 )
 
 type Rule struct {
@@ -42,11 +42,36 @@ type Predicate struct {
 	Value json.RawMessage `json:"value,omitempty"`
 }
 
+// Target identifies a destination for a matched rule. 0.1.0 supports
+// subject-only routing; headers and modes are intentionally absent until
+// there is a concrete use case (see phase plan, "deferred intentionally").
+//
+// JSON decoding rejects unknown fields so rules that accidentally include
+// deferred or misspelled fields fail loudly at load time instead of
+// silently dropping configuration.
 type Target struct {
-	Name    string            `json:"name"`
-	Subject string            `json:"subject"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Mode    string            `json:"mode,omitempty"`
+	Name    string `json:"name"`
+	Subject string `json:"subject"`
+}
+
+// targetWire mirrors Target's shape — its sole purpose is to give
+// UnmarshalJSON a type to decode into without recursing into Target's own
+// UnmarshalJSON.
+type targetWire struct {
+	Name    string `json:"name"`
+	Subject string `json:"subject"`
+}
+
+func (t *Target) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	var w targetWire
+	if err := dec.Decode(&w); err != nil {
+		return fmt.Errorf("target: %w", err)
+	}
+	t.Name = w.Name
+	t.Subject = w.Subject
+	return nil
 }
 
 type InputEvent struct {

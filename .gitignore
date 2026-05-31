@@ -71,3 +71,7 @@ desktop.ini
 
 nats/*.exe
 nats/data/
+
+.kimchi/
+
+docs/
